@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 
-export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false }) {
+export default function ZoneEditor({ imageUrl, figmaUrl, zones, onChange, readonly = false }) {
   const wrapRef = useRef(null);
   const imgRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
@@ -25,15 +25,28 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
   }
 
   useEffect(() => {
-    const img = imgRef.current;
-    if (!img) return;
-    const update = () => setImgRect(computeImgRect(img));
-    img.addEventListener('load', update);
-    if (img.complete) update();
-    const ro = new ResizeObserver(update);
-    ro.observe(img);
-    return () => { img.removeEventListener('load', update); ro.disconnect(); };
-  }, [imageUrl]);
+    if (figmaUrl) {
+      const wrap = wrapRef.current;
+      if (!wrap) return;
+      const update = () => {
+        const { width, height } = wrap.getBoundingClientRect();
+        setImgRect({ x: 0, y: 0, w: width, h: height });
+      };
+      update();
+      const ro = new ResizeObserver(update);
+      ro.observe(wrap);
+      return () => ro.disconnect();
+    } else {
+      const img = imgRef.current;
+      if (!img) return;
+      const update = () => setImgRect(computeImgRect(img));
+      img.addEventListener('load', update);
+      if (img.complete) update();
+      const ro = new ResizeObserver(update);
+      ro.observe(img);
+      return () => { img.removeEventListener('load', update); ro.disconnect(); };
+    }
+  }, [imageUrl, figmaUrl]);
 
   const getEventPos = useCallback((clientX, clientY) => {
     const rect = wrapRef.current.getBoundingClientRect();
@@ -107,6 +120,8 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
 
   const removeZone = (id) => onChange(zones.filter(z => z.id !== id));
 
+  const embedUrl = figmaUrl ? `https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(figmaUrl)}` : null;
+
   return (
     <div>
       {!readonly && (
@@ -143,7 +158,29 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <img ref={imgRef} src={imageUrl} alt="Screen" style={{ display: 'block', width: '100%', maxHeight: 480, objectFit: 'contain' }} />
+        {figmaUrl ? (
+          embedUrl && figmaUrl.trim() ? (
+            <>
+              <iframe
+                src={embedUrl}
+                style={{ display: 'block', width: '100%', height: 480, border: 'none' }}
+                allowFullScreen
+              />
+              {/* transparent overlay to capture pointer events above iframe */}
+              <div style={{ position: 'absolute', inset: 0, zIndex: 1 }} />
+            </>
+          ) : (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: 200, color: 'var(--text3)', fontSize: 13, flexDirection: 'column', gap: 8
+            }}>
+              <div style={{ fontSize: 28 }}>🔗</div>
+              Paste a Figma prototype URL above to preview
+            </div>
+          )
+        ) : (
+          <img ref={imgRef} src={imageUrl} alt="Screen" style={{ display: 'block', width: '100%', maxHeight: 480, objectFit: 'contain' }} />
+        )}
 
         {/* Existing zones */}
         {zones.map(z => (
@@ -155,7 +192,8 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
             height: z.h * imgRect.h,
             border: '2px solid #6c63ff',
             background: 'rgba(108,99,255,0.12)',
-            borderRadius: 4, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start'
+            borderRadius: 4, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start',
+            zIndex: 2
           }}>
             <span style={{
               background: '#6c63ff', color: 'white', fontSize: 11, fontWeight: 600,
@@ -166,7 +204,8 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
               <button onClick={() => removeZone(z.id)} style={{
                 position: 'absolute', top: -8, right: -8, width: 18, height: 18,
                 background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%',
-                fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                zIndex: 3
               }}>×</button>
             )}
           </div>
@@ -181,7 +220,7 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
             width: liveRect.w * imgRect.w,
             height: liveRect.h * imgRect.h,
             border: '2px dashed #6c63ff', background: 'rgba(108,99,255,0.08)',
-            pointerEvents: 'none', borderRadius: 4
+            pointerEvents: 'none', borderRadius: 4, zIndex: 2
           }} />
         )}
       </div>
