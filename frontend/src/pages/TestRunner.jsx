@@ -57,8 +57,9 @@ export default function TestRunner() {
     if (!startTime) startTimer();
 
     const t = startTime ? (Date.now() - startTime) / 1000 : 0;
-    const hit = screen.zones.some(z => px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h);
-    const newClick = { x: px, y: py, t: parseFloat(t.toFixed(2)), hit, n: clicks.length + 1 };
+    const hitZone = screen.zones.find(z => px >= z.x && px <= z.x + z.w && py >= z.y && py <= z.y + z.h);
+    const hit = !!hitZone;
+    const newClick = { x: px, y: py, t: parseFloat(t.toFixed(2)), hit, zone: hitZone?.name || null, n: clicks.length + 1 };
     const newClicks = [...clicks, newClick];
     setClicks(newClicks);
 
@@ -186,23 +187,24 @@ export default function TestRunner() {
   return (
     <div style={{ minHeight: '100vh', background: '#08080b', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
-      <div style={{ background: '#111116', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+      <div style={{ background: '#111116', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
         <div style={{ width: 28, height: 28, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>U</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 2 }}>
-            Screen {screenIdx + 1} of {totalScreens}
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 500 }}>
-            <span style={{ color: 'var(--text3)', marginRight: 6 }}>Task:</span>
-            {screen?.task}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <div style={{ fontSize: 12, color: 'var(--text3)' }}>Screen {screenIdx + 1} of {totalScreens}</div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           <div style={{ width: 100, height: 4, background: 'var(--bg4)', borderRadius: 2 }}>
             <div style={{ height: '100%', background: 'var(--accent)', borderRadius: 2, width: `${(screenIdx / totalScreens) * 100}%`, transition: 'width 0.3s' }} />
           </div>
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: 'var(--text2)', minWidth: 44, textAlign: 'right' }}>
-            {elapsed}s
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: 'var(--text2)', minWidth: 44, textAlign: 'right' }}>{elapsed}s</div>
+        </div>
+      </div>
+
+      {/* Task question banner */}
+      <div style={{ background: 'rgba(108,99,255,0.12)', borderBottom: '1px solid rgba(108,99,255,0.25)', padding: '14px 24px', flexShrink: 0 }}>
+        <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, background: 'rgba(108,99,255,0.25)', border: '1px solid rgba(108,99,255,0.4)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>🎯</div>
+          <div>
+            <div style={{ fontSize: 11, color: 'rgba(168,158,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Your task</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#e8e6ff', lineHeight: 1.4 }}>{screen?.task}</div>
           </div>
         </div>
       </div>

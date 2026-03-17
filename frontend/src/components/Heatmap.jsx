@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 
-export default function Heatmap({ imageUrl, clicks = [], zones = [] }) {
+export default function Heatmap({ imageUrl, clicks = [], zones = [], showNumbers = false }) {
   const canvasRef = useRef(null);
   const imgRef = useRef(null);
   const [renderedRect, setRenderedRect] = useState(null);
@@ -59,17 +59,21 @@ export default function Heatmap({ imageUrl, clicks = [], zones = [] }) {
         ctx.fill();
       });
 
+      const drawNumbers = showNumbers || replaying;
       displayClicks.forEach((c, i) => {
         const gx = rx + c.x * rw, gy = ry + c.y * rh;
+        const r = drawNumbers ? 10 : 7;
         ctx.beginPath();
-        ctx.arc(gx, gy, 10, 0, Math.PI * 2);
+        ctx.arc(gx, gy, r, 0, Math.PI * 2);
         ctx.fillStyle = c.hit ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)';
         ctx.fill();
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 10px DM Sans, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(i + 1, gx, gy);
+        if (drawNumbers) {
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 10px DM Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(i + 1, gx, gy);
+        }
       });
     };
 
@@ -78,7 +82,7 @@ export default function Heatmap({ imageUrl, clicks = [], zones = [] }) {
     const ro = new ResizeObserver(draw);
     ro.observe(img);
     return () => ro.disconnect();
-  }, [displayClicks, zones]);
+  }, [displayClicks, zones, replaying, showNumbers]);
 
   useEffect(() => () => { if (replayTimer.current) clearTimeout(replayTimer.current); }, []);
 

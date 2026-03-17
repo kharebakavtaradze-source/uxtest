@@ -143,8 +143,12 @@ export default function ShareResults() {
                     </div>
                   </div>
 
-                  <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px', marginBottom: 16, fontSize: 13, color: 'var(--text2)' }}>
-                    <strong style={{ color: 'var(--text)' }}>Task: </strong>{screenData.task}
+                  <div style={{ background: 'rgba(108,99,255,0.08)', border: '1px solid rgba(108,99,255,0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 16 }}>🎯</span>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'rgba(168,158,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Task shown to testers</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#e8e6ff' }}>{screenData.task}</div>
+                    </div>
                   </div>
 
                   {activeTab === 'heatmap' && (
@@ -175,17 +179,19 @@ export default function ShareResults() {
                       <div className="table-wrap">
                         <table>
                           <thead>
-                            <tr><th>Tester</th><th>Date</th><th>Result</th><th>Time</th><th>Clicks</th><th>Misclicks</th></tr>
+                            <tr><th>Tester</th><th>Date</th><th>Result</th><th>First zone hit</th><th>Time</th><th>Clicks</th><th>Misclicks</th></tr>
                           </thead>
                           <tbody>
                             {sessions.map(s => {
                               const sr = s.screen_results[activeScreen];
                               if (!sr) return null;
+                              const firstHit = sr.clicks?.find(c => c.hit);
                               return (
                                 <tr key={s.id}>
                                   <td style={{ color: 'var(--text)' }}>{s.tester_name || 'Anonymous'}</td>
                                   <td>{new Date(s.created_at).toLocaleDateString()}</td>
                                   <td><span className={`badge ${sr.success ? 'badge-green' : 'badge-red'}`}>{sr.success ? 'Success' : 'Miss'}</span></td>
+                                  <td style={{ color: firstHit?.zone ? 'var(--green)' : 'var(--text3)', fontSize: 12 }}>{firstHit?.zone || (sr.success ? '—' : 'None')}</td>
                                   <td>{sr.time_to_success != null ? sr.time_to_success.toFixed(1) + 's' : '—'}</td>
                                   <td>{sr.total_clicks}</td>
                                   <td><span className={`badge ${sr.misclick_rate > 50 ? 'badge-red' : sr.misclick_rate > 20 ? 'badge-amber' : 'badge-green'}`}>{sr.misclick_rate}%</span></td>
