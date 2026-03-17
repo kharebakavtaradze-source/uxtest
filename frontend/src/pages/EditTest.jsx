@@ -1,0 +1,143 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
+import Navbar from '../components/Navbar.jsx';
+import ZoneEditor from '../components/ZoneEditor.jsx';
+import { useToast } from '../components/Toast.jsx';
+
+export default function EditTest() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [test, setTest] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activeScreen, setActiveScreen] = useState(0);
+  const [screens, setScreens] = useState([]);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    axios.get(`/api/tests/${id}`)
+      .then(({ data }) => {
+        setTest(data);
+        setTitle(data.title);
+        setDescription(data.description || '');
+        setScreens(data.screens.map(s => ({ ...s, zones: s.zones || [] })));
+      })
+      .catch(() => toast('Failed to load test', 'error'))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  function updateScreen(i, key, val) {
+    setScreens(s => s.map((sc, idx) => idx === i ? { ...sc, [key]: val } : sc));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await axios.put(`/api/tests/${id}`, { title, description, screens });
+      toast('Test updated!');
+      navigate(`/results/${id}`);
+    } catch (err) {
+      toast(err.response?.data?.error || 'Failed to save', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return (
+    <div className="page"><Navbar />
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}><div className="spinner" style={{ width: 32, height: 32 }} /></div>
+    </div>
+  );
+
+  const current = screens[activeScreen];
+
+  return (
+    <div className="page">
+      <Navbar />
+      <div className="container" style={{ padding: '32px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+          <Link to={`/results/${id}`} style={{ color: 'var(--text3)', fontSize: 13 }}>← Results</Link>
+          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Edit test</h1>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div>
+            <div className="card" style={{ marginBottom: 18 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Test details</h2>
+              <div style={{ marginBottom: 12 }}>
+                <label className="label">Title</label>
+                <input className="input" value={title} onChange={e => setTitle(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Description</label>
+                <textarea className="textarea" value={description} onChange={e => setDescription(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="card">
+              <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>Screens</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {screens.map((sc, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setActiveScreen(i)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                      borderRadius: 8, cursor: 'pointer', border: '1px solid',
+                      borderColor: activeScreen === i ? 'var(--accent)' : 'var(--border)',
+                      background: activeScreen === i ? 'rgba(108,99,255,0.08)' : 'var(--bg3)'
+                    }}
+                  >
+                    <img src={sc.url} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 2 }}>Screen {i + 1}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {sc.task || <span style={{ color: 'var(--text3)' }}>No task</span>}
+                      </div>
+                    </div>
+                    {sc.zones.length > 0 && <span className="badge badge-purple">{sc.zones.length}z</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            {current ? (
+              <div className="card">
+                <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Screen {activeScreen + 1}</h2>
+                <div style={{ marginBottom: 16 }}>
+                  <label className="label">Task</label>
+                  <input
+                    className="input"
+                    value={current.task}
+                    onChange={e => updateScreen(activeScreen, 'task', e.target.value)}
+                    placeholder='e.g. "Find where to open an account"'
+                  />
+                </div>
+                <div>
+                  <label className="label">Target zones</label>
+                  <ZoneEditor
+                    imageUrl={current.url}
+                    zones={current.zones}
+                    onChange={zones => updateScreen(activeScreen, 'zones', zones)}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <Link to={`/results/${id}`} className="btn btn-ghost">Cancel</Link>
+          <button onClick={handleSave} className="btn btn-primary" disabled={saving}>
+            {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving...</> : 'Save changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
