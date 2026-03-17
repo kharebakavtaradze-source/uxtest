@@ -8,12 +8,26 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
   const [liveRect, setLiveRect] = useState(null);
   const [pendingName, setPendingName] = useState('');
   const [addMode, setAddMode] = useState(false);
-  const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
+  const [imgRect, setImgRect] = useState({ x: 0, y: 0, w: 0, h: 0 });
+
+  function computeImgRect(img) {
+    const iw = img.clientWidth, ih = img.clientHeight;
+    if (!iw || !ih || !img.naturalWidth) return { x: 0, y: 0, w: iw, h: ih };
+    const nRatio = img.naturalWidth / img.naturalHeight;
+    const eRatio = iw / ih;
+    let rw, rh, rx, ry;
+    if (nRatio > eRatio) {
+      rw = iw; rh = iw / nRatio; rx = 0; ry = (ih - rh) / 2;
+    } else {
+      rh = ih; rw = ih * nRatio; rx = (iw - rw) / 2; ry = 0;
+    }
+    return { x: rx, y: ry, w: rw, h: rh };
+  }
 
   useEffect(() => {
     const img = imgRef.current;
     if (!img) return;
-    const update = () => setImgSize({ w: img.clientWidth, h: img.clientHeight });
+    const update = () => setImgRect(computeImgRect(img));
     img.addEventListener('load', update);
     if (img.complete) update();
     const ro = new ResizeObserver(update);
@@ -21,26 +35,25 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
     return () => { img.removeEventListener('load', update); ro.disconnect(); };
   }, [imageUrl]);
 
-  const getPos = useCallback((e) => {
+  const getEventPos = useCallback((clientX, clientY) => {
     const rect = wrapRef.current.getBoundingClientRect();
     return {
-      x: Math.max(0, Math.min(1, (e.clientX - rect.left) / imgSize.w)),
-      y: Math.max(0, Math.min(1, (e.clientY - rect.top) / imgSize.h))
+      x: Math.max(0, Math.min(1, (clientX - rect.left - imgRect.x) / imgRect.w)),
+      y: Math.max(0, Math.min(1, (clientY - rect.top - imgRect.y) / imgRect.h))
     };
-  }, [imgSize]);
+  }, [imgRect]);
 
-  const handleMouseDown = (e) => {
+  const startDraw = (clientX, clientY) => {
     if (!addMode || readonly) return;
-    e.preventDefault();
-    const pos = getPos(e);
+    const pos = getEventPos(clientX, clientY);
     setDrawStart(pos);
     setDrawing(true);
     setLiveRect({ x: pos.x, y: pos.y, w: 0, h: 0 });
   };
 
-  const handleMouseMove = (e) => {
+  const moveDraw = (clientX, clientY) => {
     if (!drawing || !drawStart) return;
-    const pos = getPos(e);
+    const pos = getEventPos(clientX, clientY);
     setLiveRect({
       x: Math.min(drawStart.x, pos.x),
       y: Math.min(drawStart.y, pos.y),
@@ -49,9 +62,9 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
     });
   };
 
-  const handleMouseUp = (e) => {
+  const endDraw = (clientX, clientY) => {
     if (!drawing) return;
-    const pos = getPos(e);
+    const pos = getEventPos(clientX, clientY);
     const zone = {
       id: Date.now().toString(),
       name: pendingName || 'Target zone',
@@ -68,6 +81,28 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
     setDrawing(false);
     setDrawStart(null);
     setLiveRect(null);
+  };
+
+  // Mouse handlers
+  const handleMouseDown = (e) => { e.preventDefault(); startDraw(e.clientX, e.clientY); };
+  const handleMouseMove = (e) => { moveDraw(e.clientX, e.clientY); };
+  const handleMouseUp = (e) => { endDraw(e.clientX, e.clientY); };
+
+  // Touch handlers
+  const handleTouchStart = (e) => {
+    if (!addMode || readonly) return;
+    e.preventDefault();
+    startDraw(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchMove = (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    moveDraw(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchEnd = (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    endDraw(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
   };
 
   const removeZone = (id) => onChange(zones.filter(z => z.id !== id));
@@ -98,12 +133,15 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
           cursor: addMode ? 'crosshair' : 'default',
           borderRadius: 8, overflow: 'hidden',
           border: '1px solid var(--border2)',
-          userSelect: 'none'
+          userSelect: 'none', touchAction: addMode ? 'none' : 'auto'
         }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={() => { if (drawing) { setDrawing(false); setLiveRect(null); } }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <img ref={imgRef} src={imageUrl} alt="Screen" style={{ display: 'block', width: '100%', maxHeight: 480, objectFit: 'contain' }} />
 
@@ -111,8 +149,10 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
         {zones.map(z => (
           <div key={z.id} style={{
             position: 'absolute',
-            left: z.x * imgSize.w, top: z.y * imgSize.h,
-            width: z.w * imgSize.w, height: z.h * imgSize.h,
+            left: imgRect.x + z.x * imgRect.w,
+            top: imgRect.y + z.y * imgRect.h,
+            width: z.w * imgRect.w,
+            height: z.h * imgRect.h,
             border: '2px solid #6c63ff',
             background: 'rgba(108,99,255,0.12)',
             borderRadius: 4, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-start'
@@ -136,8 +176,10 @@ export default function ZoneEditor({ imageUrl, zones, onChange, readonly = false
         {liveRect && (
           <div style={{
             position: 'absolute',
-            left: liveRect.x * imgSize.w, top: liveRect.y * imgSize.h,
-            width: liveRect.w * imgSize.w, height: liveRect.h * imgSize.h,
+            left: imgRect.x + liveRect.x * imgRect.w,
+            top: imgRect.y + liveRect.y * imgRect.h,
+            width: liveRect.w * imgRect.w,
+            height: liveRect.h * imgRect.h,
             border: '2px dashed #6c63ff', background: 'rgba(108,99,255,0.08)',
             pointerEvents: 'none', borderRadius: 4
           }} />

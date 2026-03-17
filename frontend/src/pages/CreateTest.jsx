@@ -10,6 +10,9 @@ export default function CreateTest() {
   const toast = useToast();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [introText, setIntroText] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [notifyAfter, setNotifyAfter] = useState('');
   const [screens, setScreens] = useState([]);
   const [saving, setSaving] = useState(false);
   const [activeScreen, setActiveScreen] = useState(0);
@@ -56,6 +59,9 @@ export default function CreateTest() {
       const formData = new FormData();
       formData.append('title', title);
       formData.append('description', description);
+      formData.append('intro_text', introText);
+      formData.append('webhook_url', webhookUrl);
+      formData.append('notify_after', notifyAfter || '0');
       screens.forEach(s => formData.append('screens', s.file));
       formData.append('screens_meta', JSON.stringify(screens.map(s => ({ task: s.task, zones: s.zones }))));
 
@@ -89,10 +95,29 @@ export default function CreateTest() {
                 <label className="label">Title *</label>
                 <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Onboarding flow test" />
               </div>
-              <div>
+              <div style={{ marginBottom: 12 }}>
                 <label className="label">Description</label>
                 <textarea className="textarea" value={description} onChange={e => setDescription(e.target.value)} placeholder="What are you testing and why?" />
               </div>
+              <div style={{ marginBottom: 12 }}>
+                <label className="label">Custom intro text (optional)</label>
+                <textarea className="textarea" style={{ minHeight: 64 }} value={introText} onChange={e => setIntroText(e.target.value)} placeholder="Additional instructions shown to testers before they start..." />
+              </div>
+
+              <details style={{ marginTop: 4 }}>
+                <summary style={{ fontSize: 13, color: 'var(--text2)', cursor: 'pointer', userSelect: 'none' }}>⚙️ Webhook / notification (optional)</summary>
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div>
+                    <label className="label">Webhook URL</label>
+                    <input className="input" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://hooks.example.com/..." />
+                    <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>We'll POST JSON to this URL when the threshold is reached.</p>
+                  </div>
+                  <div>
+                    <label className="label">Notify after N sessions</label>
+                    <input className="input" type="number" min="0" value={notifyAfter} onChange={e => setNotifyAfter(e.target.value)} placeholder="e.g. 10" />
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div className="card">

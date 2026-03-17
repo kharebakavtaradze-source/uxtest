@@ -17,7 +17,7 @@ export default function Navbar() {
           <NavLink to="/" label="Dashboard" active={loc.pathname === '/'} />
           <NavLink to="/create" label="New Test" active={loc.pathname === '/create'} />
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'DM Mono, monospace' }}>v1.0</span>
+        <span style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'DM Mono, monospace' }}>v1.1</span>
       </div>
     </nav>
   );

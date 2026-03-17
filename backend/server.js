@@ -28,7 +28,7 @@ app.use('/uploads', express.static(uploadsDir));
 app.post('/api/tests', upload.array('screens'), async (req, res) => {
   try {
     const db = await getDb();
-    const { title, description, screens_meta } = req.body;
+    const { title, description, screens_meta, intro_text, webhook_url, notify_after } = req.body;
     const id = uuidv4().slice(0, 8).toUpperCase();
     const screensMeta = JSON.parse(screens_meta || '[]');
     const screens = req.files.map((file, i) => ({
@@ -36,7 +36,13 @@ app.post('/api/tests', upload.array('screens'), async (req, res) => {
       url: `/uploads/${file.filename}`,
       task: screensMeta[i]?.task || '', zones: screensMeta[i]?.zones || [], order: i
     }));
-    const test = { id, title, description, screens, created_at: new Date().toISOString(), status: 'active' };
+    const test = {
+      id, title, description: description || '',
+      intro_text: intro_text || '',
+      webhook_url: webhook_url || '',
+      notify_after: parseInt(notify_after) || 0,
+      screens, created_at: new Date().toISOString(), status: 'active'
+    };
     db.data.tests.push(test);
     await db.write();
     res.json(test);
@@ -59,12 +65,26 @@ app.put('/api/tests/:id', async (req, res) => {
   const db = await getDb();
   const idx = db.data.tests.findIndex(t => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Test not found' });
-  const { title, description, screens } = req.body;
-  if (title) db.data.tests[idx].title = title;
+  const { title, description, screens, intro_text, webhook_url, notify_after } = req.body;
+  if (title !== undefined) db.data.tests[idx].title = title;
   if (description !== undefined) db.data.tests[idx].description = description;
-  if (screens) db.data.tests[idx].screens = screens;
+  if (screens !== undefined) db.data.tests[idx].screens = screens;
+  if (intro_text !== undefined) db.data.tests[idx].intro_text = intro_text;
+  if (webhook_url !== undefined) db.data.tests[idx].webhook_url = webhook_url;
+  if (notify_after !== undefined) db.data.tests[idx].notify_after = parseInt(notify_after) || 0;
   await db.write();
   res.json({ success: true });
+});
+
+app.patch('/api/tests/:id/status', async (req, res) => {
+  const db = await getDb();
+  const idx = db.data.tests.findIndex(t => t.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  const { status } = req.body;
+  if (!['active', 'paused', 'closed'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  db.data.tests[idx].status = status;
+  await db.write();
+  res.json({ success: true, status });
 });
 
 app.delete('/api/tests/:id', async (req, res) => {
@@ -81,6 +101,9 @@ app.post('/api/tests/:id/sessions', async (req, res) => {
     const db = await getDb();
     const test = db.data.tests.find(t => t.id === req.params.id);
     if (!test) return res.status(404).json({ error: 'Test not found' });
+    if (test.status === 'closed') return res.status(403).json({ error: 'This test is closed and no longer accepting responses.' });
+    if (test.status === 'paused') return res.status(403).json({ error: 'This test is temporarily paused. Please try again later.' });
+
     const { tester_name, tester_email, screens_data } = req.body;
     const screenResults = test.screens.map((screen, i) => {
       const sd = screens_data[i] || { clicks: [] };
@@ -105,6 +128,22 @@ app.post('/api/tests/:id/sessions', async (req, res) => {
     };
     db.data.sessions.push(session);
     await db.write();
+
+    // Fire webhook if notify_after threshold just reached
+    const totalSessions = db.data.sessions.filter(s => s.test_id === req.params.id).length;
+    if (test.webhook_url && test.notify_after > 0 && totalSessions === test.notify_after) {
+      fetch(test.webhook_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          test_id: req.params.id,
+          test_title: test.title,
+          sessions_completed: totalSessions,
+          results_url: `/results/${req.params.id}`
+        })
+      }).catch(() => {});
+    }
+
     res.json({ session_id: session.id, overall_success: overallSuccess, avg_time: avgTime });
   } catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
 });
