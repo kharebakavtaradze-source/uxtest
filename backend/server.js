@@ -31,11 +31,14 @@ app.post('/api/tests', upload.array('screens'), async (req, res) => {
     const { title, description, screens_meta, intro_text, webhook_url, notify_after } = req.body;
     const id = uuidv4().slice(0, 8).toUpperCase();
     const screensMeta = JSON.parse(screens_meta || '[]');
-    const screens = req.files.map((file, i) => ({
-      id: uuidv4(), filename: file.filename,
-      url: `/uploads/${file.filename}`,
-      task: screensMeta[i]?.task || '', zones: screensMeta[i]?.zones || [], order: i
-    }));
+    let fileIdx = 0;
+    const screens = screensMeta.map((meta, i) => {
+      if (meta.figma_url) {
+        return { id: uuidv4(), figma_url: meta.figma_url, task: meta.task || '', zones: meta.zones || [], order: i };
+      }
+      const file = req.files[fileIdx++];
+      return { id: uuidv4(), filename: file.filename, url: `/uploads/${file.filename}`, task: meta.task || '', zones: meta.zones || [], order: i };
+    });
     const test = {
       id, title, description: description || '',
       intro_text: intro_text || '',

@@ -19,6 +19,7 @@ export default function TestRunner() {
   const [done, setDone] = useState(false);
   const timerRef = useRef(null);
   const imgRef = useRef(null);
+  const overlayRef = useRef(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -47,9 +48,12 @@ export default function TestRunner() {
   const totalScreens = test?.screens?.length || 0;
 
   function handleInteraction(clientX, clientY) {
-    if (done || !imgRef.current) return;
-    const rect = imgRef.current.getBoundingClientRect();
-    const iw = imgRef.current.clientWidth, ih = imgRef.current.clientHeight;
+    if (done) return;
+    const isFigma = !!screen?.figma_url;
+    const refEl = isFigma ? overlayRef.current : imgRef.current;
+    if (!refEl) return;
+    const rect = refEl.getBoundingClientRect();
+    const iw = refEl.clientWidth, ih = refEl.clientHeight;
     const px = (clientX - rect.left) / iw;
     const py = (clientY - rect.top) / ih;
     if (px < 0 || px > 1 || py < 0 || py > 1) return;
@@ -211,46 +215,90 @@ export default function TestRunner() {
 
       {/* Screen + clicks */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflow: 'auto' }}>
-        <div
-          style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', cursor: done ? 'default' : 'crosshair', touchAction: 'none' }}
-          onClick={handleClick}
-          onTouchEnd={handleTouchEnd}
-        >
-          <img
-            ref={imgRef}
-            src={screen?.url}
-            alt="Screen"
-            style={{ display: 'block', maxWidth: '100%', maxHeight: 'calc(100vh - 160px)', borderRadius: 8 }}
-          />
-          {/* Click dots */}
-          {clicks.map((c, i) => (
-            <div key={i} style={{
-              position: 'absolute',
-              left: `${c.x * 100}%`, top: `${c.y * 100}%`,
-              transform: 'translate(-50%,-50%)',
-              width: 24, height: 24, borderRadius: '50%',
-              background: c.hit ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.75)',
-              border: '2px solid white',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10, fontWeight: 700, color: 'white',
-              pointerEvents: 'none', transition: 'all 0.1s',
-              animation: 'popIn 0.2s ease'
-            }}>{c.n}</div>
-          ))}
-          {done && (
-            <div style={{
-              position: 'absolute', inset: 0, borderRadius: 8,
-              background: 'rgba(34,197,94,0.12)',
-              border: '2px solid rgba(34,197,94,0.6)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              pointerEvents: 'none'
-            }}>
-              <div style={{ background: 'rgba(34,197,94,0.9)', color: 'white', padding: '10px 20px', borderRadius: 99, fontWeight: 600, fontSize: 16 }}>
-                ✓ Found it!
-              </div>
+        {screen?.figma_url ? (
+          <div style={{ position: 'relative', width: '100%', maxWidth: 1200 }}>
+            <iframe
+              src={`https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(screen.figma_url)}`}
+              style={{ display: 'block', width: '100%', height: 'calc(100vh - 160px)', border: 'none', borderRadius: 8 }}
+              allowFullScreen
+            />
+            {/* Transparent overlay captures clicks above the iframe */}
+            <div
+              ref={overlayRef}
+              style={{ position: 'absolute', inset: 0, cursor: done ? 'default' : 'crosshair', zIndex: 1, borderRadius: 8 }}
+              onClick={handleClick}
+              onTouchEnd={handleTouchEnd}
+            >
+              {clicks.map((c, i) => (
+                <div key={i} style={{
+                  position: 'absolute',
+                  left: `${c.x * 100}%`, top: `${c.y * 100}%`,
+                  transform: 'translate(-50%,-50%)',
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: c.hit ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.75)',
+                  border: '2px solid white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700, color: 'white',
+                  pointerEvents: 'none', transition: 'all 0.1s',
+                  animation: 'popIn 0.2s ease'
+                }}>{c.n}</div>
+              ))}
+              {done && (
+                <div style={{
+                  position: 'absolute', inset: 0, borderRadius: 8,
+                  background: 'rgba(34,197,94,0.12)',
+                  border: '2px solid rgba(34,197,94,0.6)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  pointerEvents: 'none'
+                }}>
+                  <div style={{ background: 'rgba(34,197,94,0.9)', color: 'white', padding: '10px 20px', borderRadius: 99, fontWeight: 600, fontSize: 16 }}>
+                    ✓ Found it!
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div
+            style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', cursor: done ? 'default' : 'crosshair', touchAction: 'none' }}
+            onClick={handleClick}
+            onTouchEnd={handleTouchEnd}
+          >
+            <img
+              ref={imgRef}
+              src={screen?.url}
+              alt="Screen"
+              style={{ display: 'block', maxWidth: '100%', maxHeight: 'calc(100vh - 160px)', borderRadius: 8 }}
+            />
+            {clicks.map((c, i) => (
+              <div key={i} style={{
+                position: 'absolute',
+                left: `${c.x * 100}%`, top: `${c.y * 100}%`,
+                transform: 'translate(-50%,-50%)',
+                width: 24, height: 24, borderRadius: '50%',
+                background: c.hit ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.75)',
+                border: '2px solid white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 700, color: 'white',
+                pointerEvents: 'none', transition: 'all 0.1s',
+                animation: 'popIn 0.2s ease'
+              }}>{c.n}</div>
+            ))}
+            {done && (
+              <div style={{
+                position: 'absolute', inset: 0, borderRadius: 8,
+                background: 'rgba(34,197,94,0.12)',
+                border: '2px solid rgba(34,197,94,0.6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                pointerEvents: 'none'
+              }}>
+                <div style={{ background: 'rgba(34,197,94,0.9)', color: 'white', padding: '10px 20px', borderRadius: 99, fontWeight: 600, fontSize: 16 }}>
+                  ✓ Found it!
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '12px 24px', background: '#111116', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

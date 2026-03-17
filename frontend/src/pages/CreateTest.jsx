@@ -20,12 +20,18 @@ export default function CreateTest() {
   function handleFiles(e) {
     const files = Array.from(e.target.files);
     const newScreens = files.map(file => ({
+      type: 'upload',
       file,
       preview: URL.createObjectURL(file),
       task: '',
       zones: []
     }));
     setScreens(s => [...s, ...newScreens]);
+  }
+
+  function addFigmaScreen() {
+    setScreens(s => [...s, { type: 'figma', figmaUrl: '', task: '', zones: [] }]);
+    setActiveScreen(screens.length);
   }
 
   function updateScreen(i, key, val) {
@@ -53,6 +59,8 @@ export default function CreateTest() {
     if (!hasTask) { toast('Every screen needs a task description', 'error'); return; }
     const hasZone = screens.every(s => s.zones.length > 0);
     if (!hasZone) { toast('Every screen needs at least one target zone', 'error'); return; }
+    const hasFigmaUrl = screens.every(s => s.type !== 'figma' || s.figmaUrl.trim().startsWith('https://www.figma.com/proto/'));
+    if (!hasFigmaUrl) { toast('Figma URL must start with https://www.figma.com/proto/...', 'error'); return; }
 
     setSaving(true);
     try {
@@ -62,8 +70,12 @@ export default function CreateTest() {
       formData.append('intro_text', introText);
       formData.append('webhook_url', webhookUrl);
       formData.append('notify_after', notifyAfter || '0');
-      screens.forEach(s => formData.append('screens', s.file));
-      formData.append('screens_meta', JSON.stringify(screens.map(s => ({ task: s.task, zones: s.zones }))));
+      screens.filter(s => s.type !== 'figma').forEach(s => formData.append('screens', s.file));
+      formData.append('screens_meta', JSON.stringify(screens.map(s =>
+        s.type === 'figma'
+          ? { task: s.task, zones: s.zones, figma_url: s.figmaUrl }
+          : { task: s.task, zones: s.zones }
+      )));
 
       const { data } = await axios.post('/api/tests', formData);
       toast('Test created!');
@@ -83,7 +95,7 @@ export default function CreateTest() {
       <div className="container" style={{ padding: '36px 24px' }}>
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>Create a new test</h1>
-          <p style={{ color: 'var(--text2)', fontSize: 14 }}>Upload your design screens, define tasks, and draw target zones.</p>
+          <p style={{ color: 'var(--text2)', fontSize: 14 }}>Upload design screens or paste Figma prototype links, define tasks, and draw target zones.</p>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
@@ -123,23 +135,37 @@ export default function CreateTest() {
             <div className="card">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <h2 style={{ fontSize: 15, fontWeight: 600 }}>Screens ({screens.length})</h2>
-                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                  + Upload
-                  <input type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: 'none' }} />
-                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                    + Upload
+                    <input type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: 'none' }} />
+                  </label>
+                  <button className="btn btn-secondary btn-sm" onClick={addFigmaScreen}>+ Figma</button>
+                </div>
               </div>
 
               {screens.length === 0 ? (
-                <label style={{
-                  display: 'block', border: '2px dashed var(--border2)', borderRadius: 10,
-                  padding: '36px 24px', textAlign: 'center', cursor: 'pointer',
-                  color: 'var(--text3)', fontSize: 14, transition: 'border-color 0.15s'
-                }}>
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>📤</div>
-                  Click to upload PNG/JPG screens<br />
-                  <span style={{ fontSize: 12 }}>Up to 10MB each</span>
-                  <input type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: 'none' }} />
-                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <label style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    border: '2px dashed var(--border2)', borderRadius: 10, padding: '28px 12px',
+                    textAlign: 'center', cursor: 'pointer', color: 'var(--text3)', fontSize: 13,
+                    transition: 'border-color 0.15s', gap: 8
+                  }}>
+                    <div style={{ fontSize: 26 }}>📤</div>
+                    <div>Upload image<br /><span style={{ fontSize: 11 }}>PNG/JPG, up to 10MB</span></div>
+                    <input type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: 'none' }} />
+                  </label>
+                  <button onClick={addFigmaScreen} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    border: '2px dashed var(--border2)', borderRadius: 10, padding: '28px 12px',
+                    textAlign: 'center', cursor: 'pointer', color: 'var(--text3)', fontSize: 13,
+                    background: 'none', transition: 'border-color 0.15s', gap: 8
+                  }}>
+                    <div style={{ fontSize: 26 }}>🔗</div>
+                    <div>Figma prototype<br /><span style={{ fontSize: 11 }}>Paste a proto URL</span></div>
+                  </button>
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {screens.map((sc, i) => (
@@ -153,9 +179,20 @@ export default function CreateTest() {
                         background: activeScreen === i ? 'rgba(108,99,255,0.08)' : 'var(--bg3)'
                       }}
                     >
-                      <img src={sc.preview} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6 }} />
+                      {sc.type === 'figma' ? (
+                        <div style={{
+                          width: 44, height: 44, borderRadius: 6, flexShrink: 0,
+                          background: 'rgba(108,99,255,0.15)', border: '1px solid rgba(108,99,255,0.3)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18
+                        }}>🔗</div>
+                      ) : (
+                        <img src={sc.preview} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+                      )}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 2 }}>Screen {i + 1}</div>
+                        <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 2 }}>
+                          Screen {i + 1}
+                          {sc.type === 'figma' && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--accent)', fontWeight: 400 }}>Figma</span>}
+                        </div>
                         <div style={{ fontSize: 12, color: 'var(--text2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {sc.task || <span style={{ color: 'var(--text3)' }}>No task yet</span>}
                         </div>
@@ -180,6 +217,22 @@ export default function CreateTest() {
                 <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>
                   Screen {activeScreen + 1} — Edit task & zones
                 </h2>
+
+                {current.type === 'figma' && (
+                  <div style={{ marginBottom: 16 }}>
+                    <label className="label">Figma prototype URL *</label>
+                    <input
+                      className="input"
+                      value={current.figmaUrl}
+                      onChange={e => updateScreen(activeScreen, 'figmaUrl', e.target.value)}
+                      placeholder="https://www.figma.com/proto/..."
+                    />
+                    <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 5 }}>
+                      Paste a Figma prototype share link. The prototype will be embedded for testers.
+                    </p>
+                  </div>
+                )}
+
                 <div style={{ marginBottom: 16 }}>
                   <label className="label">Task for tester *</label>
                   <input
@@ -199,7 +252,8 @@ export default function CreateTest() {
                     Draw rectangles over the correct click targets on the screen.
                   </p>
                   <ZoneEditor
-                    imageUrl={current.preview}
+                    imageUrl={current.type !== 'figma' ? current.preview : undefined}
+                    figmaUrl={current.type === 'figma' ? current.figmaUrl : undefined}
                     zones={current.zones}
                     onChange={zones => updateScreen(activeScreen, 'zones', zones)}
                   />
