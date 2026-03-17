@@ -16,6 +16,9 @@ export default function EditTest() {
   const [screens, setScreens] = useState([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [introText, setIntroText] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [notifyAfter, setNotifyAfter] = useState('');
 
   useEffect(() => {
     axios.get(`/api/tests/${id}`)
@@ -23,6 +26,9 @@ export default function EditTest() {
         setTest(data);
         setTitle(data.title);
         setDescription(data.description || '');
+        setIntroText(data.intro_text || '');
+        setWebhookUrl(data.webhook_url || '');
+        setNotifyAfter(data.notify_after ? String(data.notify_after) : '');
         setScreens(data.screens.map(s => ({ ...s, zones: s.zones || [] })));
       })
       .catch(() => toast('Failed to load test', 'error'))
@@ -33,10 +39,24 @@ export default function EditTest() {
     setScreens(s => s.map((sc, idx) => idx === i ? { ...sc, [key]: val } : sc));
   }
 
+  function moveScreen(i, dir) {
+    const arr = [...screens];
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setScreens(arr);
+    setActiveScreen(j);
+  }
+
   async function handleSave() {
     setSaving(true);
     try {
-      await axios.put(`/api/tests/${id}`, { title, description, screens });
+      await axios.put(`/api/tests/${id}`, {
+        title, description, screens,
+        intro_text: introText,
+        webhook_url: webhookUrl,
+        notify_after: parseInt(notifyAfter) || 0
+      });
       toast('Test updated!');
       navigate(`/results/${id}`);
     } catch (err) {
@@ -71,10 +91,29 @@ export default function EditTest() {
                 <label className="label">Title</label>
                 <input className="input" value={title} onChange={e => setTitle(e.target.value)} />
               </div>
-              <div>
+              <div style={{ marginBottom: 12 }}>
                 <label className="label">Description</label>
                 <textarea className="textarea" value={description} onChange={e => setDescription(e.target.value)} />
               </div>
+              <div style={{ marginBottom: 12 }}>
+                <label className="label">Custom intro text (optional)</label>
+                <textarea className="textarea" style={{ minHeight: 64 }} value={introText} onChange={e => setIntroText(e.target.value)} placeholder="Additional instructions shown to testers before they start..." />
+              </div>
+
+              <details style={{ marginTop: 4 }}>
+                <summary style={{ fontSize: 13, color: 'var(--text2)', cursor: 'pointer', userSelect: 'none' }}>⚙️ Webhook / notification (optional)</summary>
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div>
+                    <label className="label">Webhook URL</label>
+                    <input className="input" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://hooks.example.com/..." />
+                    <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>We'll POST JSON to this URL when the threshold is reached.</p>
+                  </div>
+                  <div>
+                    <label className="label">Notify after N sessions</label>
+                    <input className="input" type="number" min="0" value={notifyAfter} onChange={e => setNotifyAfter(e.target.value)} placeholder="e.g. 10" />
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div className="card">
@@ -98,7 +137,11 @@ export default function EditTest() {
                         {sc.task || <span style={{ color: 'var(--text3)' }}>No task</span>}
                       </div>
                     </div>
-                    {sc.zones.length > 0 && <span className="badge badge-purple">{sc.zones.length}z</span>}
+                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                      {sc.zones.length > 0 && <span className="badge badge-purple">{sc.zones.length}z</span>}
+                      <button onClick={e => { e.stopPropagation(); moveScreen(i, -1); }} className="btn btn-ghost btn-sm" style={{ padding: '4px 6px' }}>↑</button>
+                      <button onClick={e => { e.stopPropagation(); moveScreen(i, 1); }} className="btn btn-ghost btn-sm" style={{ padding: '4px 6px' }}>↓</button>
+                    </div>
                   </div>
                 ))}
               </div>

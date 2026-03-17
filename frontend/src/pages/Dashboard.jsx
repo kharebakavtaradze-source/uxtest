@@ -27,6 +27,26 @@ export default function Dashboard() {
     fetchTests();
   }
 
+  async function toggleStatus(id, currentStatus, e) {
+    e.preventDefault();
+    const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+    try {
+      await axios.patch(`/api/tests/${id}/status`, { status: newStatus });
+      toast(newStatus === 'active' ? 'Test resumed' : 'Test paused');
+      fetchTests();
+    } catch { toast('Failed to update status', 'error'); }
+  }
+
+  async function closeTest(id, e) {
+    e.preventDefault();
+    if (!confirm('Close this test permanently? No new sessions will be accepted.')) return;
+    try {
+      await axios.patch(`/api/tests/${id}/status`, { status: 'closed' });
+      toast('Test closed');
+      fetchTests();
+    } catch { toast('Failed to close test', 'error'); }
+  }
+
   return (
     <div className="page">
       <Navbar />
@@ -52,7 +72,15 @@ export default function Dashboard() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18 }}>
-            {tests.map(test => <TestCard key={test.id} test={test} onDelete={deleteTest} />)}
+            {tests.map(test => (
+              <TestCard
+                key={test.id}
+                test={test}
+                onDelete={deleteTest}
+                onToggleStatus={toggleStatus}
+                onClose={closeTest}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -60,8 +88,16 @@ export default function Dashboard() {
   );
 }
 
-function TestCard({ test, onDelete }) {
+function StatusBadge({ status }) {
+  if (status === 'paused') return <span className="badge badge-amber">Paused</span>;
+  if (status === 'closed') return <span className="badge badge-red">Closed</span>;
+  return <span className="badge badge-green">Active</span>;
+}
+
+function TestCard({ test, onDelete, onToggleStatus, onClose }) {
   const thumb = test.screens?.[0]?.url;
+  const status = test.status || 'active';
+
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', transition: 'border-color 0.15s' }}>
       <div style={{ height: 160, background: 'var(--bg3)', overflow: 'hidden', position: 'relative' }}>
@@ -70,26 +106,38 @@ function TestCard({ test, onDelete }) {
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text3)', fontSize: 32 }}>📱</div>
         )}
-        <div style={{ position: 'absolute', bottom: 10, left: 12 }}>
+        <div style={{ position: 'absolute', bottom: 10, left: 12, display: 'flex', gap: 6 }}>
           <span className="badge badge-purple">{test.screens?.length || 0} screen{test.screens?.length !== 1 ? 's' : ''}</span>
+          <StatusBadge status={status} />
         </div>
       </div>
       <div style={{ padding: '16px 18px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-          <div>
-            <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 3 }}>{test.title}</h3>
-            <p style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 1.4 }}>{test.description || 'No description'}</p>
-          </div>
-          <span className="badge badge-green" style={{ flexShrink: 0, marginTop: 2 }}>Active</span>
+        <div style={{ marginBottom: 10 }}>
+          <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 3 }}>{test.title}</h3>
+          <p style={{ color: 'var(--text2)', fontSize: 13, lineHeight: 1.4 }}>{test.description || 'No description'}</p>
         </div>
         <div style={{ color: 'var(--text3)', fontSize: 12, marginBottom: 14 }}>
           Created {new Date(test.created_at).toLocaleDateString()}
           &nbsp;·&nbsp; ID: <span className="mono">{test.id}</span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Link to={`/results/${test.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>📊 Results</Link>
-          <Link to={`/test/${test.id}`} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>▶ Run Test</Link>
-          <button onClick={e => onDelete(test.id, e)} className="btn btn-ghost btn-sm">🗑</button>
+          {status !== 'closed' && (
+            <Link to={`/test/${test.id}`} className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>▶ Run</Link>
+          )}
+          {status !== 'closed' && (
+            <button
+              onClick={e => onToggleStatus(test.id, status, e)}
+              className="btn btn-ghost btn-sm"
+              title={status === 'active' ? 'Pause test' : 'Resume test'}
+            >
+              {status === 'active' ? '⏸' : '▶'}
+            </button>
+          )}
+          {status !== 'closed' && (
+            <button onClick={e => onClose(test.id, e)} className="btn btn-ghost btn-sm" title="Close test permanently" style={{ color: 'var(--amber)' }}>🔒</button>
+          )}
+          <button onClick={e => onDelete(test.id, e)} className="btn btn-ghost btn-sm" title="Delete test">🗑</button>
         </div>
       </div>
     </div>

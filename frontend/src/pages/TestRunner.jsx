@@ -19,7 +19,6 @@ export default function TestRunner() {
   const [done, setDone] = useState(false);
   const timerRef = useRef(null);
   const imgRef = useRef(null);
-  const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -47,16 +46,13 @@ export default function TestRunner() {
   const screen = test?.screens?.[screenIdx];
   const totalScreens = test?.screens?.length || 0;
 
-  function handleImgLoad() {
-    if (imgRef.current) setImgSize({ w: imgRef.current.clientWidth, h: imgRef.current.clientHeight });
-  }
-
-  function handleClick(e) {
-    if (done) return;
+  function handleInteraction(clientX, clientY) {
+    if (done || !imgRef.current) return;
     const rect = imgRef.current.getBoundingClientRect();
     const iw = imgRef.current.clientWidth, ih = imgRef.current.clientHeight;
-    const px = (e.clientX - rect.left) / iw;
-    const py = (e.clientY - rect.top) / ih;
+    const px = (clientX - rect.left) / iw;
+    const py = (clientY - rect.top) / ih;
+    if (px < 0 || px > 1 || py < 0 || py > 1) return;
 
     if (!startTime) startTimer();
 
@@ -71,6 +67,16 @@ export default function TestRunner() {
       setDone(true);
       setTimeout(() => advanceScreen(newClicks), 900);
     }
+  }
+
+  function handleClick(e) {
+    handleInteraction(e.clientX, e.clientY);
+  }
+
+  function handleTouchEnd(e) {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    handleInteraction(t.clientX, t.clientY);
   }
 
   function advanceScreen(finalClicks) {
@@ -93,8 +99,10 @@ export default function TestRunner() {
         screens_data: data
       });
       setStep('done');
-    } catch { setStep('done'); }
-    finally { setSubmitting(false); }
+    } catch (err) {
+      const msg = err.response?.data?.error;
+      setError(msg || 'Failed to submit');
+    } finally { setSubmitting(false); }
   }
 
   function skipScreen() {
@@ -107,7 +115,27 @@ export default function TestRunner() {
   }
 
   if (loading) return <Center><div className="spinner" style={{ width: 36, height: 36 }} /></Center>;
-  if (error) return <Center><p style={{ color: 'var(--text2)' }}>{error}</p></Center>;
+  if (error) return <Center><div style={{ textAlign: 'center', maxWidth: 360 }}><p style={{ color: 'var(--text2)', marginBottom: 16 }}>{error}</p></div></Center>;
+
+  if (test?.status === 'closed') return (
+    <Center>
+      <div style={{ textAlign: 'center', maxWidth: 360 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ fontSize: 18, marginBottom: 8 }}>Test closed</h2>
+        <p style={{ color: 'var(--text2)' }}>This test is no longer accepting responses.</p>
+      </div>
+    </Center>
+  );
+
+  if (test?.status === 'paused') return (
+    <Center>
+      <div style={{ textAlign: 'center', maxWidth: 360 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>⏸</div>
+        <h2 style={{ fontSize: 18, marginBottom: 8 }}>Test paused</h2>
+        <p style={{ color: 'var(--text2)' }}>This test is temporarily paused. Please check back later.</p>
+      </div>
+    </Center>
+  );
 
   // INTRO
   if (step === 'intro') return (
@@ -119,6 +147,11 @@ export default function TestRunner() {
           {test.description && <p style={{ color: 'var(--text2)', fontSize: 14 }}>{test.description}</p>}
         </div>
         <div className="card" style={{ marginBottom: 16 }}>
+          {test.intro_text && (
+            <div style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--bg3)', borderRadius: 8, fontSize: 14, color: 'var(--text)', lineHeight: 1.6, borderLeft: '3px solid var(--accent)' }}>
+              {test.intro_text}
+            </div>
+          )}
           <p style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
             You'll be shown <strong style={{ color: 'var(--text)' }}>{totalScreens} screen{totalScreens !== 1 ? 's' : ''}</strong>. For each one, read the task and click where you'd naturally go. There are no wrong answers — we're studying the design, not you.
           </p>
@@ -165,9 +198,8 @@ export default function TestRunner() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-          {/* Progress bar */}
           <div style={{ width: 100, height: 4, background: 'var(--bg4)', borderRadius: 2 }}>
-            <div style={{ height: '100%', background: 'var(--accent)', borderRadius: 2, width: `${((screenIdx) / totalScreens) * 100}%`, transition: 'width 0.3s' }} />
+            <div style={{ height: '100%', background: 'var(--accent)', borderRadius: 2, width: `${(screenIdx / totalScreens) * 100}%`, transition: 'width 0.3s' }} />
           </div>
           <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, color: 'var(--text2)', minWidth: 44, textAlign: 'right' }}>
             {elapsed}s
@@ -177,13 +209,15 @@ export default function TestRunner() {
 
       {/* Screen + clicks */}
       <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflow: 'auto' }}>
-        <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', cursor: done ? 'default' : 'crosshair' }}
-          onClick={handleClick}>
+        <div
+          style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', cursor: done ? 'default' : 'crosshair', touchAction: 'none' }}
+          onClick={handleClick}
+          onTouchEnd={handleTouchEnd}
+        >
           <img
             ref={imgRef}
             src={screen?.url}
             alt="Screen"
-            onLoad={handleImgLoad}
             style={{ display: 'block', maxWidth: '100%', maxHeight: 'calc(100vh - 160px)', borderRadius: 8 }}
           />
           {/* Click dots */}
@@ -230,5 +264,5 @@ export default function TestRunner() {
 }
 
 function Center({ children }) {
-  return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{children}</div>;
+  return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 24 }}>{children}</div>;
 }
